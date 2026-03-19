@@ -110,5 +110,71 @@ class SolarEngine {
         if ($energyPerPanel <= 0) return 0;
         return (int)ceil($requiredEnergy / $energyPerPanel);
     }
+
+    /**
+     * Shading Analysis
+     * @param float[] $solarValues
+     * @param float $threshold
+     * @returns array { shadedIndices, isSafe }
+     */
+    public static function performShadingAnalysis($solarValues, $threshold = 0.3) {
+        if (empty($solarValues)) return ['shaded' => [], 'isSafe' => true];
+        $max = max($solarValues);
+        $shaded = [];
+        foreach ($solarValues as $i => $v) {
+            if ($v < ($max * $threshold)) {
+                $shaded[] = $i;
+            }
+        }
+        return [
+            'shaded' => $shaded,
+            'isSafe' => empty($shaded)
+        ];
+    }
+
+    /**
+     * ML-based Suitability Check (Heuristic)
+     * @param float[] $solarValues
+     * @returns bool
+     */
+    public static function checkSuitability($solarValues) {
+        if (empty($solarValues)) return false;
+        $max = max($solarValues);
+        if ($max <= 0) return false;
+        $normalizedAvg = (array_sum($solarValues) / count($solarValues)) / $max;
+        return $normalizedAvg > 0.2;
+    }
+
+    /**
+     * Advanced Shading Calculation based on obstacles
+     * @param float $elevation Sun elevation in degrees
+     * @param float $obstacleHeight meters
+     * @param float $obstacleDistance meters
+     * @returns bool true if shaded
+     */
+    public static function isBlockedByObstacle($elevation, $obstacleHeight, $obstacleDistance) {
+        if ($obstacleDistance <= 0) return false;
+        $shadingThreshold = rad2deg(atan($obstacleHeight / $obstacleDistance));
+        return $elevation < $shadingThreshold;
+    }
+
+    /**
+     * Generate KML Content
+     */
+    public static function generateKml($lat, $lon, $elevation = 0, $cityName = "Target") {
+        return '<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Solar Optimizer Site</name>
+    <Placemark>
+      <name>Solar Panel: ' . htmlspecialchars($cityName) . '</name>
+      <Point>
+        <coordinates>' . $lon . ',' . $lat . ',' . $elevation . '</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>';
+    }
 }
+
 ?>
