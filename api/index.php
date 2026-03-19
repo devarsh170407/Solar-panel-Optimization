@@ -191,7 +191,7 @@ function generateSvgChart($values, $labels) {
                     <div class="stat-label" style="color: var(--error); margin-bottom: 1rem;"><?= htmlspecialchars($error) ?></div>
                 <?php endif; ?>
 
-                <form method="POST" action="index.php">
+                <form method="POST" action="/">
                     <div class="form-group">
                         <label for="city-input">Target Location</label>
                         <input type="text" name="city" id="city-input" class="input-box" placeholder="e.g. Mumbai, India" value="<?= htmlspecialchars($cityName) ?>">
