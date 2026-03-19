@@ -2,12 +2,12 @@
 require_once 'SolarEngine.php';
 
 // --- Default Values ---
-$cityName = "Mumbai";
-$numMonths = 3;
-$requiredEnergy = 100;
-$useTracking = true;
-$obsHeight = 10;
-$obsDist = 20;
+$cityName = $cityName ?? "Mumbai";
+$numMonths = $numMonths ?? 3;
+$requiredEnergy = $requiredEnergy ?? 100;
+$useTracking = $useTracking ?? true;
+$obsHeight = $obsHeight ?? 10;
+$obsDist = $obsDist ?? 20;
 
 $error = null;
 $results = null;
@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['analyze'])) {
         $sunPos = SolarEngine::calculateSunPosition($lat, $lon, $declination, $currentHour);
         $isBlocked = SolarEngine::isBlockedByObstacle($sunPos['elevation'], $obsHeight, $obsDist);
 
-        // 6. Elevation Data (Simulated for speed, or could fetch from opentopodata if user prefers)
+        // 6. Elevation Data
         $elevUrl = "https://api.opentopodata.org/v1/srtm90m?locations=$lat,$lon";
         $elevJson = @file_get_contents($elevUrl, false, $context);
         $elevData = json_decode($elevJson, true);
@@ -115,30 +115,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['analyze'])) {
 // --- Helper: Generate SVG Chart ---
 function generateSvgChart($values, $labels, $shadingIndices) {
     if (empty($values)) return "";
-    $width = 1000;
-    $height = 300;
+    $width = 1200;
+    $height = 400;
     $max = max($values) ?: 1;
     $points = "";
     $step = $width / (count($values) - 1);
     
     foreach ($values as $i => $v) {
         $x = $i * $step;
-        $y = $height - ($v / $max * ($height - 40)) - 20;
+        $y = $height - ($v / $max * ($height - 60)) - 30;
         $points .= "$x,$y ";
     }
     
     $svg = "<svg viewBox='0 0 $width $height' class='chart-svg' preserveAspectRatio='none'>";
-    $svg .= "<defs><linearGradient id='grad' x1='0' y1='0' x2='0' y2='1'><stop offset='0%' stop-color='#fbbf24' stop-opacity='0.2'/><stop offset='100%' stop-color='#fbbf24' stop-opacity='0'/></linearGradient></defs>";
+    $svg .= "<defs>
+        <linearGradient id='line-grad' x1='0' y1='0' x2='1' y2='0'><stop offset='0%' stop-color='#38bdf8'/><stop offset='50%' stop-color='#fbbf24'/><stop offset='100%' stop-color='#0ea5e9'/></linearGradient>
+        <linearGradient id='area-grad' x1='0' y1='0' x2='0' y2='1'><stop offset='0%' stop-color='#fbbf24' stop-opacity='0.15'/><stop offset='100%' stop-color='#fbbf24' stop-opacity='0'/></linearGradient>
+        <filter id='shadow'><feDropShadow dx='0' dy='4' stdDeviation='4' flood-color='rgba(0,0,0,0.3)'/></filter>
+    </defs>";
     
-    // Shading areas
-    foreach ($shadingIndices as $idx) {
-        $x = $idx * $step;
-        $svg .= "<rect x='" . ($x - $step/2) . "' y='0' width='$step' height='$height' fill='rgba(239, 68, 68, 0.1)' />";
+    // Grid Lines
+    for ($i = 0; $i <= 5; $i++) {
+        $y = $height - ($i * ($height / 5));
+        $svg .= "<line x1='0' y1='$y' x2='$width' y2='$y' stroke='rgba(255,255,255,0.05)' stroke-width='1' />";
     }
     
-    // Line & Gradient
-    $svg .= "<polyline points='$points' fill='none' stroke='#fbbf24' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' />";
-    $svg .= "<polygon points='0,$height $points $width,$height' fill='url(#grad)' />";
+    // Shading Highlight
+    foreach ($shadingIndices as $idx) {
+        $x = $idx * $step;
+        $svg .= "<rect x='" . ($x - $step/2) . "' y='0' width='$step' height='$height' fill='rgba(239, 68, 68, 0.08)' />";
+    }
+    
+    $svg .= "<polyline points='$points' fill='none' stroke='url(#line-grad)' stroke-width='4' stroke-linecap='round' stroke-linejoin='round' filter='url(#shadow)' />";
+    $svg .= "<polygon points='0,$height $points $width,$height' fill='url(#area-grad)' />";
     $svg .= "</svg>";
     return $svg;
 }
@@ -148,204 +157,213 @@ function generateSvgChart($values, $labels, $shadingIndices) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solar Optimizer | Advanced Premium Dashboard</title>
+    <title>Solar Optimizer | Visual Excellence Edition</title>
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
-    <style>
-        :root {
-            --glass: rgba(255, 255, 255, 0.03);
-            --glass-border: rgba(255, 255, 255, 0.08);
-            --premium-accent: #0ea5e9;
-        }
-        body { font-family: 'Outfit', sans-serif; background: #020617; }
-        .vis-container-3d { border: 1px solid var(--glass-border); box-shadow: 0 0 50px rgba(0,0,0,0.5); }
-        .alert-card {
-            padding: 1.5rem;
-            border-radius: 16px;
-            margin-bottom: 2rem;
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            border: 1px solid transparent;
-        }
-        .alert-success { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); color: #10b981; }
-        .alert-warning { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2); color: #f59e0b; }
-        .alert-error { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); color: #ef4444; }
-        
-        .kml-btn {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid var(--glass-border);
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 10px;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .kml-btn:hover { background: var(--premium-accent); border-color: var(--premium-accent); }
-    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css">
 </head>
-<body>
-    <div class="app-container">
-        <header>
-            <div class="premium-badge">Advanced MATLAB Port</div>
-            <h1>Solar Optimizer <span style="font-weight: 300; opacity: 0.6;">v2.0</span></h1>
-            <p>Unlocking precision solar data with dual-axis tracking simulation and machine-learning heuristics.</p>
-        </header>
+<body class="luxury-theme">
+    <!-- Immersive Background -->
+    <div class="fixed-background">
+        <div class="star-field"></div>
+        <div class="nebula-1"></div>
+        <div class="nebula-2"></div>
+    </div>
 
-        <?php if ($results): ?>
-            <div class="results-top-bar">
-                <?php if ($results['suitable']): ?>
-                    <div class="alert-card alert-success">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                        <span><strong>Suitable Location:</strong> Solar radiation levels are excellent for implementation.</span>
-                    </div>
-                <?php else: ?>
-                    <div class="alert-card alert-warning">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                        <span><strong>Warning:</strong> Location may have sub-optimal radiation for peak efficiency.</span>
-                    </div>
-                <?php endif; ?>
-                
-                <?php if ($results['is_blocked']): ?>
-                    <div class="alert-card alert-error">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
-                        <span><strong>Current Shading Alert:</strong> The sun is currently blocked by local obstacles (<?= $obsHeight ?>m at <?= $obsDist ?>m).</span>
-                    </div>
-                <?php endif; ?>
+    <div class="layout-wrapper">
+        <!-- Sidebar Navigation & Controls -->
+        <aside class="sidebar-modern">
+            <div class="brand-section">
+                <div class="logo-circle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/><circle cx="12" cy="12" r="4"/></svg>
+                </div>
+                <div class="brand-info">
+                    <span class="brand-name">SolarEngine</span>
+                    <span class="brand-tag">v2.0 Performance</span>
+                </div>
             </div>
-        <?php endif; ?>
 
-        <main class="dashboard-grid">
-            <aside class="glass-card input-section">
-                <h2>Control Panel</h2>
+            <nav class="nav-links">
+                <div class="nav-item active">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></nav>
+                    <span>Dashboard</span>
+                </div>
+            </nav>
+
+            <div class="sidebar-card">
+                <h3>Parameters</h3>
                 <form method="POST" action="/">
-                    <div class="form-group">
-                        <label>Target Site</label>
-                        <input type="text" name="city" class="input-box" value="<?= htmlspecialchars($cityName) ?>" placeholder="City Name">
+                    <div class="input-group-modern">
+                        <label>Target City</label>
+                        <input type="text" name="city" value="<?= htmlspecialchars($cityName) ?>" class="input-modern" placeholder="Mumbai, IN">
                     </div>
 
-                    <div class="input-row">
-                        <div class="form-group">
-                            <label>Data Range</label>
-                            <select name="months" class="input-box">
+                    <div class="input-split">
+                        <div class="input-group-modern">
+                            <label>Timeline</label>
+                            <select name="months" class="select-modern">
                                 <?php foreach([1,3,6,12] as $m): ?>
-                                    <option value="<?= $m ?>" <?= $numMonths == $m ? 'selected' : '' ?>><?= $m ?> Months</option>
+                                    <option value="<?= $m ?>" <?= $numMonths == $m ? 'selected' : '' ?>><?= $m ?> mo</option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label>Goal (kWh)</label>
-                            <input type="number" name="energy" class="input-box" value="<?= $requiredEnergy ?>">
+                        <div class="input-group-modern">
+                            <label>Energy (kWh)</label>
+                            <input type="number" name="energy" value="<?= $requiredEnergy ?>" class="input-modern">
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label>Tracking System</label>
-                        <select name="tracking" class="input-box">
-                            <option value="false" <?= !$useTracking ? 'selected' : '' ?>>Static Panel Array</option>
-                            <option value="true" <?= $useTracking ? 'selected' : '' ?>>Dual-Axis Smart Tracking</option>
-                        </select>
-                    </div>
-
-                    <div class="form-divider">Advanced Shading Params</div>
-                    <div class="input-row">
-                        <div class="form-group">
-                            <label>Obstacle Height (m)</label>
-                            <input type="number" step="0.1" name="obs_height" class="input-box" value="<?= $obsHeight ?>">
-                        </div>
-                        <div class="form-group">
-                            <label>Distance (m)</label>
-                            <input type="number" step="0.1" name="obs_dist" class="input-box" value="<?= $obsDist ?>">
+                    <div class="input-group-modern">
+                        <label>Tracking Logic</label>
+                        <div class="custom-toggle-group">
+                            <input type="radio" name="tracking" value="false" id="static" <?= !$useTracking ? 'checked' : '' ?>>
+                            <label for="static">Static</label>
+                            <input type="radio" name="tracking" value="true" id="dual" <?= $useTracking ? 'checked' : '' ?>>
+                            <label for="dual">Dual-Axis</label>
                         </div>
                     </div>
 
-                    <button type="submit" name="analyze" class="btn-primary">Calculate Optimization</button>
+                    <div class="divider-text">Local Shading</div>
+                    <div class="input-split">
+                        <div class="input-group-modern">
+                            <label>Height (m)</label>
+                            <input type="number" step="0.1" name="obs_height" value="<?= $obsHeight ?>" class="input-modern">
+                        </div>
+                        <div class="input-group-modern">
+                            <label>Dist (m)</label>
+                            <input type="number" step="0.1" name="obs_dist" value="<?= $obsDist ?>" class="input-modern">
+                        </div>
+                    </div>
+
+                    <button type="submit" name="analyze" class="btn-primary-modern">Run Analysis</button>
                     
                     <?php if ($results): ?>
-                        <div style="margin-top: 1rem;">
-                            <a href="?download_kml=1&lat=<?= $results['lat'] ?>&lon=<?= $results['lon'] ?>&elev=<?= $results['elevation'] ?>&city=<?= urlencode($cityName) ?>" class="kml-btn">
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                                Export KML (Google Earth)
-                            </a>
-                        </div>
+                        <a href="?download_kml=1&lat=<?= $results['lat'] ?>&lon=<?= $results['lon'] ?>&elev=<?= $results['elevation'] ?>&city=<?= urlencode($cityName) ?>" class="btn-secondary-modern">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Export KML
+                        </a>
                     <?php endif; ?>
                 </form>
-            </aside>
+            </div>
+        </aside>
 
-            <section class="visualization-section">
-                <div class="stats-grid <?= $results ? '' : 'hidden' ?>">
-                    <div class="stat-card">
-                        <div class="stat-icon sun"></div>
-                        <div class="stat-val"><?= $results ? $results['num_panels'] : '--' ?></div>
-                        <div class="stat-label">Panel Count</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon tilt"></div>
-                        <div class="stat-val"><?= $results ? number_format($results['optimal_tilt'], 1) : '--' ?>°</div>
-                        <div class="stat-label">Optimal Tilt</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon energy"></div>
-                        <div class="stat-val"><?= $results ? number_format($results['energy_per_day'], 2) : '--' ?></div>
-                        <div class="stat-label">Avg kWh/Day</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon mountain"></div>
-                        <div class="stat-val"><?= $results ? number_format($results['elevation'], 0) : '--' ?>m</div>
-                        <div class="stat-label">Elevation</div>
-                    </div>
-                </div>
-
-                <div class="glass-card">
-                    <h2>Sun Trajectory & Dynamic Tracking</h2>
-                    <div class="vis-container-3d">
-                        <div class="scene-3d">
-                            <div class="ground-3d">
-                                <div class="grid-overlay"></div>
-                                <div class="compass-label n">N</div>
-                                <div class="compass-label s">S</div>
-                                <div class="compass-label e">E</div>
-                                <div class="compass-label w">W</div>
-                            </div>
-                            <?php if ($results): 
-                                $sun = $results['sun'];
-                                $azRad = deg2rad($sun['azimuth']);
-                                $elRad = deg2rad($sun['elevation']);
-                                $r = 160;
-                                $sx = $r * sin($azRad) * cos($elRad);
-                                $sz = $r * cos($azRad) * cos($elRad);
-                                $sy = $r * sin($elRad);
-                                
-                                $pX = $useTracking ? -$sun['elevation'] : -$results['optimal_tilt'];
-                                $pY = $useTracking ? $sun['azimuth'] : 0;
-                            ?>
-                                <div class="sun-orbit"></div>
-                                <div class="sun-3d" style="transform: translate3d(<?= 135+$sx ?>px, <?= 135+$sz ?>px, <?= $sy ?>px);"></div>
-                                <div class="panel-3d" style="transform: rotateX(<?= $pX ?>deg) rotateY(<?= $pY ?>deg);">
-                                    <div class="panel-cells"></div>
-                                </div>
-                            <?php else: ?>
-                                <div class="panel-3d"></div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="glass-card">
-                    <h2>Radiation Analysis & Shading Detection</h2>
-                    <div class="chart-container">
-                        <?= $results ? generateSvgChart($results['values'], $results['labels'], $results['shading']['shaded']) : '<div class="empty-state">Analyze to see radiation timeline</div>' ?>
-                    </div>
-                    <?php if ($results && !empty($results['shading']['shaded'])): ?>
-                        <div class="shading-legend">
-                            <span class="dot warning"></span> Shading detected on <?= count($results['shading']['shaded']) ?> days in the selected period.
-                        </div>
+        <!-- Main Content Area -->
+        <main class="content-modern">
+            <header class="content-header">
+                <div>
+                    <h1>Optimization Workspace</h1>
+                    <?php if ($results): ?>
+                        <p class="location-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> <?= $results['display_name'] ?></p>
                     <?php endif; ?>
+                </div>
+            </header>
+
+            <?php if ($error): ?>
+                <div class="error-toast"><?= htmlspecialchars($error) ?></div>
+            <?php endif; ?>
+
+            <section class="dashboard-overview">
+                <!-- Status Row -->
+                <?php if ($results): ?>
+                    <div class="status-row">
+                        <div class="status-card <?= $results['suitable'] ? 'suitable' : 'poor' ?>">
+                            <div class="status-icon">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                            </div>
+                            <div class="status-body">
+                                <h3>Location Suitability</h3>
+                                <p><?= $results['suitable'] ? 'Peak Performance Mode: Data indicates high solar potential.' : 'Sub-Optimal: Low radiation levels detected for this area.' ?></p>
+                            </div>
+                        </div>
+                        <?php if ($results['is_blocked']): ?>
+                            <div class="status-card danger">
+                                <div class="status-icon">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                </div>
+                                <div class="status-body">
+                                    <h3>Obstacle Interference</h3>
+                                    <p>The sun is currently obstructed by a <?= $obsHeight ?>m obstacle nearby.</p>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Stats Grid -->
+                <div class="modern-stats-grid">
+                    <div class="mega-stat">
+                        <span class="mega-val"><?= $results ? $results['num_panels'] : '--' ?></span>
+                        <span class="mega-label">Required Panels</span>
+                        <div class="mega-sub">Total Units</div>
+                    </div>
+                    <div class="mega-stat accent">
+                        <span class="mega-val"><?= $results ? number_format($results['optimal_tilt'], 1) : '--' ?>°</span>
+                        <span class="mega-label">Optimum Tilt</span>
+                        <div class="mega-sub">Astronomical Center</div>
+                    </div>
+                    <div class="mega-stat solar">
+                        <span class="mega-val"><?= $results ? number_format($results['energy_per_day'], 2) : '--' ?></span>
+                        <span class="mega-label">Yield (kWh)</span>
+                        <div class="mega-sub">Average Daily Output</div>
+                    </div>
+                    <div class="mega-stat earth">
+                        <span class="mega-val"><?= $results ? number_format($results['elevation'], 0) : '--' ?>m</span>
+                        <span class="mega-label">Elevation</span>
+                        <div class="mega-sub">Above Sea Level</div>
+                    </div>
+                </div>
+
+                <!-- Visualization Core -->
+                <div class="visual-core-grid">
+                    <div class="visual-card-large">
+                        <div class="vcard-header">
+                            <h3>Sun Trajectory Simulation</h3>
+                            <span class="badge-v">Dual-Axis Tracking</span>
+                        </div>
+                        <div class="vis-container-premium">
+                            <div class="scene-premium">
+                                <div class="ground-premium">
+                                    <div class="scanner-line"></div>
+                                    <div class="compass-marker n">N</div>
+                                    <div class="compass-marker s">S</div>
+                                    <div class="compass-marker e">E</div>
+                                    <div class="compass-marker w">W</div>
+                                </div>
+                                <?php if ($results): 
+                                    $sun = $results['sun'];
+                                    $azRad = deg2rad($sun['azimuth']);
+                                    $elRad = deg2rad($sun['elevation']);
+                                    $r = 180;
+                                    $sx = $r * sin($azRad) * cos($elRad);
+                                    $sz = $r * cos($azRad) * cos($elRad);
+                                    $sy = $r * sin($elRad);
+                                    
+                                    $pX = $useTracking ? -$sun['elevation'] : -$results['optimal_tilt'];
+                                    $pY = $useTracking ? $sun['azimuth'] : 0;
+                                ?>
+                                    <div class="sun-glow-field" style="transform: translate3d(<?= 140+$sx ?>px, <?= 140+$sz ?>px, <?= $sy ?>px);"></div>
+                                    <div class="sun-premium" style="transform: translate3d(<?= 145+$sx ?>px, <?= 145+$sz ?>px, <?= $sy ?>px);"></div>
+                                    <div class="tracking-panel" style="transform: rotateX(<?= $pX ?>deg) rotateY(<?= $pY ?>deg);">
+                                        <div class="wafer-grid"></div>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="tracking-panel"></div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="visual-card-wide">
+                        <div class="vcard-header">
+                            <h3>Radiation Timeline</h3>
+                            <span class="badge-v">Spectral Analysis</span>
+                        </div>
+                        <div class="chart-wrapper-premium">
+                            <?= $results ? generateSvgChart($results['values'], $results['labels'], $results['shading']['shaded']) : '<div class="empty-vis">Select a location to initialize data</div>' ?>
+                        </div>
+                    </div>
                 </div>
             </section>
         </main>
